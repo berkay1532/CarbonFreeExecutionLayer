@@ -36,8 +36,9 @@ The execution layer processes special **carbon system withdrawals** that are cre
 1. **Clone the repository**
 
    ```bash
-   git clone <your-carbon-neutrality-eip-repo>
+   git clone https://github.com/berkay1532/CarbonFreeExecutionLayer.git
    cd CarbonNeutralityEIP
+   git checkout eip-carbon-neutral
    ```
 
 2. **Build Geth with Carbon Support**
