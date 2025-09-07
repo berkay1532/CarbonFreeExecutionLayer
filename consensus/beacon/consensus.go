@@ -29,6 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -38,6 +40,17 @@ import (
 var (
 	beaconDifficulty = common.Big0          // The default block difficulty in the beacon consensus
 	beaconNonce      = types.EncodeNonce(0) // The default block nonce in the beacon consensus
+)
+
+// Carbon withdrawal system constants.
+const (
+	CarbonSystemValidatorIndex = 0xFFFFFFFF // 4294967295 - Special validator index for carbon system withdrawals
+)
+
+// Carbon withdrawal metrics
+var (
+	carbonWithdrawalCount = metrics.NewRegisteredCounter("carbon/withdrawal/count", nil)
+	carbonWithdrawalAmount = metrics.NewRegisteredCounter("carbon/withdrawal/amount", nil)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -343,10 +356,17 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	}
 	// Withdrawals processing.
 	for _, w := range body.Withdrawals {
-		// Convert amount from gwei to wei.
-		amount := new(uint256.Int).SetUint64(w.Amount)
-		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
-		state.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
+		if isCarbonSystemWithdrawal(w) {
+			// Process as carbon system withdrawal
+			if err := processCarbonWithdrawal(w, state); err != nil {
+				panic(fmt.Sprintf("failed to process carbon withdrawal: %v", err))
+			}
+		} else {
+			// Process as normal validator withdrawal
+			if err := processValidatorWithdrawal(w, state); err != nil {
+				panic(fmt.Sprintf("failed to process validator withdrawal: %v", err))
+			}
+		}
 	}
 	// No block reward which is issued by consensus layer instead.
 }
@@ -477,4 +497,42 @@ func (beacon *Beacon) SetThreads(threads int) {
 	if th, ok := beacon.ethone.(threaded); ok {
 		th.SetThreads(threads)
 	}
+}
+
+// isCarbonSystemWithdrawal checks if a withdrawal is from the carbon system
+// by verifying the special validator index.
+func isCarbonSystemWithdrawal(withdrawal *types.Withdrawal) bool {
+	return withdrawal.Validator == CarbonSystemValidatorIndex
+}
+
+// processCarbonWithdrawal handles carbon system withdrawals by directly
+// crediting the treasury address with the withdrawal amount.
+func processCarbonWithdrawal(withdrawal *types.Withdrawal, state vm.StateDB) error {
+	// Convert amount from gwei to wei
+	amount := new(uint256.Int).SetUint64(withdrawal.Amount)
+	amount = amount.Mul(amount, uint256.NewInt(params.GWei))
+	
+	// Add balance to treasury address
+	state.AddBalance(withdrawal.Address, amount, tracing.BalanceIncreaseWithdrawal)
+	
+	// Update metrics
+	carbonWithdrawalCount.Inc(1)
+	carbonWithdrawalAmount.Inc(int64(withdrawal.Amount)) // Amount in gwei
+	
+	log.Info("Carbon Treasury Transfer", 
+		"address", withdrawal.Address.Hex(),
+		"amount_gwei", withdrawal.Amount,
+		"amount_wei", amount,
+		"withdrawal_index", withdrawal.Index)
+	
+	return nil
+}
+
+// processValidatorWithdrawal handles normal validator withdrawals.
+func processValidatorWithdrawal(withdrawal *types.Withdrawal, state vm.StateDB) error {
+	// Convert amount from gwei to wei
+	amount := new(uint256.Int).SetUint64(withdrawal.Amount)
+	amount = amount.Mul(amount, uint256.NewInt(params.GWei))
+	state.AddBalance(withdrawal.Address, amount, tracing.BalanceIncreaseWithdrawal)
+	return nil
 }

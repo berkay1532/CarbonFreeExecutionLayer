@@ -34,14 +34,12 @@ The execution layer processes special **carbon system withdrawals** that are cre
 ### Installation
 
 1. **Clone the repository**
-
    ```bash
    git clone <your-carbon-neutrality-eip-repo>
    cd CarbonNeutralityEIP
    ```
 
 2. **Build Geth with Carbon Support**
-
    ```bash
    make geth
    ```
@@ -99,14 +97,14 @@ func processCarbonWithdrawal(withdrawal *types.Withdrawal, state vm.StateDB) err
     // Convert amount from gwei to wei
     amount := new(uint256.Int).SetUint64(withdrawal.Amount)
     amount = amount.Mul(amount, uint256.NewInt(params.GWei))
-
+    
     // Add balance to treasury address
     state.AddBalance(withdrawal.Address, amount, tracing.BalanceIncreaseWithdrawal)
-
+    
     // Update metrics and logging
     carbonWithdrawalCount.Inc(1)
     carbonWithdrawalAmount.Inc(int64(withdrawal.Amount))
-
+    
     return nil
 }
 ```
@@ -116,8 +114,7 @@ func processCarbonWithdrawal(withdrawal *types.Withdrawal, state vm.StateDB) err
 This execution layer works with the **CarbonFreeConsensys** consensus layer:
 
 1. **Consensus Layer Repository**: Contains the beacon chain that:
-
-   - Deducts 1% carbon offset from validator rewards
+   - Deducts 1% carbon offset from validator rewards  
    - Creates carbon withdrawals with `ValidatorIndex=0xFFFFFFFF`
    - Sends withdrawals to execution layer
 
@@ -177,7 +174,6 @@ INFO Carbon Treasury Transfer
 ## 📝 License
 
 This project extends Go Ethereum and maintains the same licensing:
-
 - Library code: GNU Lesser General Public License v3.0
 - Binary code: GNU General Public License v3.0
 
@@ -203,7 +199,6 @@ A: This is a research implementation. Production deployment requires extensive t
 ## 🆘 Support
 
 For issues and questions:
-
 - Create an issue in this repository
 - Check the test outputs for debugging
 - Review the consensus layer repository for the complete carbon system
